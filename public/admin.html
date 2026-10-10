@@ -1,0 +1,68 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Admin Dashboard</title><meta name="robots" content="noindex"><link rel="stylesheet" href="/css/style.css"></head>
+<body><header><a href="/" class="logo">Admin Dashboard</a><button class="btn sm" id="out">Log out</button></header><nav class="crumbs"><a href="/">Home</a><span class="sep">›</span><span>Admin Dashboard</span></nav>
+<div class="wrap">
+<div class="panel"><h3 style="color:var(--gold)">Upload project to live gallery</h3>
+<form id="pf"><div class="grid2"><input name="title" placeholder="Title" required><input name="location" placeholder="Location"><input name="duration" placeholder="Duration (e.g. 8 months)">
+<select name="type"><option value="res">Residential</option><option value="com">Commercial</option><option value="ren">Renovation</option></select></div>
+<textarea name="scope" rows="3" placeholder="Project scope"></textarea><div class="grid2"><input name="testimonialText" placeholder="Client testimonial"><input name="testimonialAuthor" placeholder="Client name"></div>
+<div class="drop" id="drop">Drag &amp; drop project photos here, or click to choose<input type="file" id="fi" accept="image/*" multiple hidden></div><div class="thumbs" id="th"></div>
+<div class="grid2"><label>Before photo (optional)<input type="file" name="before" accept="image/*"></label><label>After photo (optional)<input type="file" name="after" accept="image/*"></label></div>
+<button class="btn solid">Publish project</button><p class="msg" id="pm"></p></form></div>
+
+<div class="panel"><h3 style="color:var(--gold)">Photo library (shown in Services &amp; Projects)</h3>
+<form id="lf"><div class="grid2"><select name="cat"><option value="res">Residential</option><option value="com">Commercial / Infrastructure</option><option value="ren">Renovations</option></select>
+<select name="kind"><option value="photo">Regular photos</option><option value="before">Before photo (1 file)</option><option value="after">After photo (1 file)</option></select>
+<input name="pair" placeholder="Before/After pair name (same on both)"></div>
+<input type="file" name="files" accept="image/*" multiple required><button class="btn solid">Upload</button><p class="msg" id="lm"></p></form></div>
+<div class="panel"><h3 style="color:var(--gold)">Users</h3><table id="users"></table></div>
+
+<div class="panel"><h3 style="color:var(--gold)">Client project &amp; progress</h3>
+<form id="cpf"><div class="grid2"><select name="userId" class="usel" required></select><input name="name" placeholder="Project name" required><input name="progress" type="number" min="0" max="100" placeholder="Progress %"><input name="status" placeholder="Status"></div>
+<input name="update" placeholder="First update note"><button class="btn solid">Create</button></form><table id="cps"></table></div>
+
+<div class="panel"><h3 style="color:var(--gold)">Secure document vault upload</h3>
+<form id="df"><div class="grid2"><select name="userId" class="usel" required></select><input name="title" placeholder="Title"><select name="category"><option>contract</option><option>blueprint</option><option>permit</option><option>invoice</option></select></div>
+<input type="file" name="file" required><button class="btn solid">Upload</button><p class="msg" id="dm"></p></form></div>
+
+<div class="panel"><h3 style="color:var(--gold)">New blog post</h3><form id="bf"><div class="grid2"><input name="title" placeholder="Title" required><select name="lang"><option value="he">Hebrew</option><option value="en">English</option></select></div>
+<input name="excerpt" placeholder="Short excerpt (meta description)"><textarea name="body" rows="6" placeholder="Article" required></textarea><button class="btn solid">Publish</button><p class="msg" id="bm"></p></form></div>
+
+<div class="panel"><h3 style="color:var(--gold)">Leads</h3><table id="leads"></table></div>
+</div>
+<script src="/js/api.js"></script>
+<script>
+if(!getToken()||localStorage.role!=='admin')location.href='/';
+const $=s=>document.querySelector(s),esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+$('#out').onclick=()=>{localStorage.clear();location.href='/'};
+async function shrink(f){if(!f.type.startsWith('image/')||f.size<900000)return f;const b=await createImageBitmap(f),s=Math.min(1,2000/Math.max(b.width,b.height)),c=document.createElement('canvas');
+ c.width=Math.round(b.width*s);c.height=Math.round(b.height*s);c.getContext('2d').drawImage(b,0,0,c.width,c.height);
+ const bl=await new Promise(r=>c.toBlob(r,'image/jpeg',.85));return new File([bl],f.name.replace(/\.\w+$/,'')+'.jpg',{type:'image/jpeg'})}
+async function up(f){const fd=new FormData();fd.append('file',await shrink(f));return (await api('/api/admin/upload',{method:'POST',body:fd})).url}
+let files=[];const drop=$('#drop'),fi=$('#fi');
+const addFiles=l=>{files=files.concat([...l].filter(f=>f.type.startsWith('image/')));$('#th').innerHTML='';files.forEach(f=>{const i=new Image();i.src=URL.createObjectURL(f);$('#th').append(i)})};
+drop.onclick=()=>fi.click();fi.onchange=()=>addFiles(fi.files);
+['dragover','dragenter'].forEach(v=>drop.addEventListener(v,e=>{e.preventDefault();drop.classList.add('over')}));
+['dragleave','drop'].forEach(v=>drop.addEventListener(v,e=>{e.preventDefault();drop.classList.remove('over')}));
+drop.addEventListener('drop',e=>addFiles(e.dataTransfer.files));
+$('#pf').onsubmit=async e=>{e.preventDefault();const f=e.target,b=Object.fromEntries(new FormData(f));delete b.before;delete b.after;
+ try{$('#pm').textContent='Uploading photos…';b.images=[];for(const x of files)b.images.push(await up(x));
+  if(f.before.files[0])b.before=await up(f.before.files[0]);if(f.after.files[0])b.after=await up(f.after.files[0]);
+  await api('/api/projects',{method:'POST',body:b});$('#pm').textContent='Published ✔';f.reset();files=[];$('#th').innerHTML=''}catch(er){$('#pm').textContent=er.message}};
+async function loadUsers(){const us=await api('/api/admin/users');
+ $('#users').innerHTML='<tr><th>Name</th><th>Email</th><th>Role</th><th></th></tr>'+us.map(u=>`<tr><td>${esc(u.name)}</td><td>${esc(u.email)}</td><td>${u.role}</td><td>${u.role==='admin'?'':`<button class="btn sm" data-d="${u.id}">Delete</button>`}</td></tr>`).join('');
+ document.querySelectorAll('[data-d]').forEach(b=>b.onclick=async()=>{if(confirm('Delete user?')){await api('/api/admin/users/'+b.dataset.d,{method:'DELETE'});loadUsers()}});
+ document.querySelectorAll('.usel').forEach(s=>s.innerHTML=us.filter(u=>u.role==='client').map(u=>`<option value="${u.id}">${esc(u.name)} (${esc(u.email)})</option>`).join(''));}
+async function loadCps(){const c=await api('/api/admin/client-projects');
+ $('#cps').innerHTML=c.map(p=>`<tr><td>${esc(p.name)}</td><td>${p.progress}%</td><td><input type="number" min="0" max="100" value="${p.progress}" data-p="${p.id}" style="width:80px"></td><td><input placeholder="New update" data-u="${p.id}"></td></tr>`).join('');
+ document.querySelectorAll('[data-p]').forEach(i=>i.onchange=async()=>{await api('/api/admin/client-projects/'+i.dataset.p,{method:'PATCH',body:{progress:i.value}});loadCps()});
+ document.querySelectorAll('[data-u]').forEach(i=>i.onchange=async()=>{await api('/api/admin/client-projects/'+i.dataset.u,{method:'PATCH',body:{update:i.value}});i.value=''})}
+$('#cpf').onsubmit=async e=>{e.preventDefault();await api('/api/admin/client-projects',{method:'POST',body:Object.fromEntries(new FormData(e.target))});e.target.reset();loadCps()};
+$('#df').onsubmit=async e=>{e.preventDefault();if(e.target.file.files[0].size>4e6){$('#dm').textContent='File too large (max 4MB)';return}try{await api('/api/admin/documents',{method:'POST',body:new FormData(e.target)});$('#dm').textContent='Uploaded ✔';e.target.reset()}catch(er){$('#dm').textContent=er.message}};
+$('#bf').onsubmit=async e=>{e.preventDefault();try{const p=await api('/api/posts',{method:'POST',body:Object.fromEntries(new FormData(e.target))});$('#bm').textContent='Published: /blog/'+p.slug;e.target.reset()}catch(er){$('#bm').textContent=er.message}};
+api('/api/admin/leads').then(l=>$('#leads').innerHTML='<tr><th>Date</th><th>Name</th><th>Phone</th><th>Type</th><th>Message</th></tr>'+l.reverse().map(x=>`<tr><td>${new Date(x.date).toLocaleDateString()}</td><td>${esc(x.name)}</td><td>${esc(x.phone)}</td><td>${esc(x.type)}${x.other?': '+esc(x.other):''}</td><td>${esc(x.message)}</td></tr>`).join(''));
+$('#lf').onsubmit=async e=>{e.preventDefault();const f=e.target;let n=0;
+ try{for(const x of f.files.files){const fd=new FormData();fd.append('cat',f.cat.value);fd.append('kind',f.kind.value);fd.append('pair',f.pair.value);fd.append('file',await shrink(x));
+  await api('/api/admin/library',{method:'POST',body:fd});n++;$('#lm').textContent='Uploaded '+n+'…'}$('#lm').textContent='Uploaded '+n+' ✔';f.reset()}catch(er){$('#lm').textContent=er.message+' (uploaded '+n+')'}};
+loadUsers();loadCps();
+</script></body></html>

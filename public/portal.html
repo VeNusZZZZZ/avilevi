@@ -1,0 +1,19 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Client Portal</title><meta name="robots" content="noindex"><link rel="stylesheet" href="/css/style.css"></head>
+<body><header><a href="/" class="logo">Yitzhak &amp; Avi Levi Ltd.</a><button class="btn sm" id="out">Log out</button></header><nav class="crumbs"><a href="/">Home</a><span class="sep">›</span><span>Client Portal</span></nav>
+<div class="wrap"><h2 id="hi"></h2>
+<div><h3 style="color:var(--gold)">My projects</h3><div id="projs"></div></div>
+<div class="panel"><h3 style="color:var(--gold)">Document vault</h3><table id="docs"></table></div></div>
+<script src="/js/api.js"></script>
+<script>
+if(!getToken())location.href='/';
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+document.getElementById('hi').textContent='Welcome, '+(localStorage.uname||'');
+document.getElementById('out').onclick=()=>{localStorage.clear();location.href='/'};
+api('/api/portal/projects').then(ps=>{document.getElementById('projs').innerHTML=ps.length?ps.map(p=>`<div class="panel" style="margin-bottom:14px"><h3>${esc(p.name)} <small>· ${esc(p.status)}</small></h3>
+<div class="bar"><i style="width:${p.progress}%"></i></div><b>${p.progress}%</b><ul style="margin-top:10px;padding-inline-start:20px">${p.updates.map(u=>`<li>${new Date(u.date).toLocaleDateString()} – ${esc(u.text)}</li>`).join('')}</ul></div>`).join(''):'<p class="sub">No projects assigned yet.</p>'});
+api('/api/portal/documents').then(ds=>{const t=document.getElementById('docs');
+t.innerHTML=ds.length?ds.map(d=>`<tr><td>${esc(d.title)}</td><td>${esc(d.category)}</td><td>${new Date(d.date).toLocaleDateString()}</td><td><button class="btn sm" data-id="${d.id}" data-n="${esc(d.original)}">Download</button></td></tr>`).join(''):'<tr><td>No documents yet.</td></tr>';
+t.querySelectorAll('button').forEach(b=>b.onclick=async()=>{const r=await fetch(`/api/portal/documents/${b.dataset.id}/download`,{headers:{Authorization:'Bearer '+getToken()}});
+const a=document.createElement('a');a.href=URL.createObjectURL(await r.blob());a.download=b.dataset.n;a.click()})});
+</script></body></html>
